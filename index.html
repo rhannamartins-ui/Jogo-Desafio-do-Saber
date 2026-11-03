@@ -1,0 +1,1613 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  BookOpen, Award, CheckCircle2, XCircle, RotateCcw, Play, BarChart2, 
+  Settings, User, Lock, Eye, EyeOff, ShieldAlert, Sparkles, Flame, 
+  Clock, ArrowRight, HelpCircle, GraduationCap, ChevronRight, Moon, 
+  Sun, Volume2, VolumeX, RefreshCw, Bookmark, Share2, LogOut, Check,
+  Target, AlertTriangle, FileText, Lightbulb, Compass, Zap, Trophy,
+  ChevronLeft, Filter, Layers, LayoutDashboard
+} from 'lucide-react';
+
+// --- CONSTANTES & HELPERS ---
+const AVATARS = ['🎓', '🦊', '🦉', '🚀', '🧠', '⭐', '🧪', '🎨', '🦁', '🤖', '📚', '💡'];
+
+const SCHOOL_LEVELS = [
+  { id: '1em', name: '1º Ano Ensino Médio', desc: 'Fundamentos e conceitos essenciais de entrada.', icon: '📘', color: 'border-pink-300 bg-pink-50 text-pink-700 dark:bg-pink-950 dark:text-pink-200' },
+  { id: '2em', name: '2º Ano Ensino Médio', desc: 'Aprofundamento de conteúdos e fórmulas avançadas.', icon: '📗', color: 'border-purple-300 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-200' },
+  { id: '3em', name: '3º Ano Ensino Médio', desc: 'Revisão geral, conteúdos complexos e vestibular.', icon: '📕', color: 'border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200' },
+  { id: 'fund', name: 'Revisão Ensino Fundamental', desc: 'Base sólida do 6º ao 9º ano (Matemática, Português e Ciências).', icon: '🎒', color: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200' },
+  { id: 'enem', name: 'Preparação ENEM', desc: 'Questões contextualizadas, cronômetro e simulados reais.', icon: '🏆', color: 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200' },
+];
+
+const SUBJECTS = [
+  {
+    id: 'linguagens',
+    name: 'Linguagens & Códigos',
+    color: '#E87A90',
+    bgClass: 'bg-[#FDF2F4] dark:bg-[#3D1E24] border-[#E87A90]',
+    badgeBg: 'bg-[#E87A90] text-white',
+    disciplines: ['Língua Portuguesa', 'Gramática', 'Interpretação de Texto', 'Literatura', 'Redação ENEM', 'Língua Inglesa'],
+    topics: ['Competência 5 Redação', 'Uso de Conectivos', 'Modernismo', 'Sintaxe e Pontuação', 'Interpretação Textual']
+  },
+  {
+    id: 'matematica',
+    name: 'Matemática',
+    color: '#5B9BD5',
+    bgClass: 'bg-[#F0F6FC] dark:bg-[#1A2D42] border-[#5B9BD5]',
+    badgeBg: 'bg-[#5B9BD5] text-white',
+    disciplines: ['Matemática Básica', 'Álgebra', 'Geometria Plana', 'Funções', 'Trigonometria', 'Probabilidade'],
+    topics: ['Porcentagem e Juros', 'Regra de Três', 'Geometria Espacial', 'Análise Gráfica', 'Estatística']
+  },
+  {
+    id: 'natureza',
+    name: 'Ciências da Natureza',
+    color: '#52B788',
+    bgClass: 'bg-[#F0FDF4] dark:bg-[#1B382B] border-[#52B788]',
+    badgeBg: 'bg-[#52B788] text-white',
+    disciplines: ['Biologia', 'Química', 'Física'],
+    topics: ['Ecologia', 'Leis de Newton', 'Química Orgânica', 'Citologia', 'Termodinâmica']
+  },
+  {
+    id: 'humanas',
+    name: 'Ciências Humanas',
+    color: '#9B72CF',
+    bgClass: 'bg-[#F7F2FA] dark:bg-[#2C1F3D] border-[#9B72CF]',
+    badgeBg: 'bg-[#9B72CF] text-white',
+    disciplines: ['História', 'Geografia', 'Filosofia', 'Sociologia'],
+    topics: ['Brasil Colônia', 'Geopolítica Global', 'Filosofia Antiga', 'Mundo Contemporâneo', 'Cidadania', 'Urbanização e Conurbação']
+  }
+];
+
+const shuffleArray = (array) => {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
+const USER_PROFILE_KEY = 'DESAFIO_SABER_CURRENT_PROFILE_V10';
+const ACCOUNTS_DB_KEY = 'DESAFIO_SABER_REGISTERED_USERS_DB_V10';
+
+const hashPassword = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return 'hash_' + Math.abs(hash).toString(36);
+};
+
+const normalizeStatementFingerprint = (text) => {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/\[.*?\]/g, '')
+    .replace(/[^\w\s]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+// GERADOR UNIVERSAL COM DISTINÇÃO REAL POR NÍVEL ESCOLAR E TÓPICO
+const generateTopicSpecificQuestion = (subjectId, topicName, index, targetDifficulty = 'todas', schoolLevel = '3em') => {
+  const sub = SUBJECTS.find(s => s.id === subjectId) || SUBJECTS[0];
+  const difficultyList = ['fácil', 'média', 'difícil'];
+  const diff = targetDifficulty === 'todas' ? difficultyList[index % 3] : targetDifficulty;
+  
+  const topicsList = sub.topics;
+  const actualTopic = topicName || topicsList[index % topicsList.length];
+  const topicLower = actualTopic.toLowerCase();
+
+  let statement = '';
+  let correctText = '';
+  let wrongTexts = [];
+  let explanation = '';
+  let tip = '';
+
+  const randNum = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const uniqueSeed = index * 313 + randNum(1, 99999);
+  const lvlTag = schoolLevel.toUpperCase();
+  const caseId = (index * 13 + randNum(1, 100)) % 100 + 1;
+
+  // Prefixos e abordagens adaptadas estritamente ao nível escolar selecionado
+  const levelContextPrefix = {
+    '1em': 'No contexto introdutório do Ensino Médio',
+    '2em': 'No aprofundamento do 2º ano',
+    '3em': 'Em nível avançado para vestibulares',
+    'fund': 'Com base nos fundamentos do Ensino Fundamental',
+    'enem': 'No padrão de exigência contextualizada do ENEM'
+  }[schoolLevel] || 'No contexto acadêmico';
+
+  // -------------------------------------------------------------
+  // MATEMÁTICA
+  // -------------------------------------------------------------
+  if (subjectId === 'matematica') {
+    const offset = schoolLevel === '1em' ? 2 : schoolLevel === '2em' ? 5 : schoolLevel === '3em' ? 10 : schoolLevel === 'fund' ? 1 : 15;
+    if (topicLower.includes('geometria')) {
+      const mode = index % 5;
+      const factor = offset + index + (caseId % 5);
+      if (mode === 0) {
+        const side = factor + 2;
+        const area = side * side;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Um quadrado possui lado igual a ${side} cm. Determine sua área exata.`;
+        correctText = `${area} cm²`;
+        wrongTexts = [`${side * 4} cm²`, `${area + 16} cm²`, `${area - 12 > 0 ? area - 12 : area + 20} cm²`];
+        explanation = `Área do quadrado = Lado² = ${side}² = ${area} cm².`;
+        tip = 'Área do quadrado = Lado x Lado.';
+      } else if (mode === 1) {
+        const base = factor + 3;
+        const height = factor + 1;
+        const area = (base * height) / 2;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Qual é a área de um triângulo com base de ${base} m e altura de ${height} m?`;
+        correctText = `${area} m²`;
+        wrongTexts = [`${base * height} m²`, `${area + 8} m²`, `${area - 5 > 0 ? area - 5 : area + 14} m²`];
+        explanation = `Área do triângulo = (b × h) / 2 = (${base} × ${height}) / 2 = ${area} m².`;
+        tip = 'Área do triângulo = (Base . Altura) / 2.';
+      } else if (mode === 2) {
+        const r = (index % 6) + factor;
+        const circ = (2 * 3.14 * r).toFixed(1);
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Para um círculo de raio r = ${r} dm (π = 3,14), o comprimento é:`;
+        correctText = `${circ} dm`;
+        wrongTexts = [`${(3.14 * r * r).toFixed(1)} dm`, `${(3.14 * r).toFixed(1)} dm`, `${(4 * r).toFixed(1)} dm`];
+        explanation = `Comprimento = 2 × π × r = 2 × 3,14 × ${r} = ${circ} dm.`;
+        tip = 'C = 2.π.r';
+      } else if (mode === 3) {
+        const b1 = factor + 2;
+        const b2 = b1 + 5;
+        const h = 3 + (index % 4);
+        const area = ((b1 + b2) * h) / 2;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Um trapézio tem bases ${b2} cm e ${b1} cm, com altura de ${h} cm. Sua área é:`;
+        correctText = `${area} cm²`;
+        wrongTexts = [`${(b1 + b2) * h} cm²`, `${area + 12} cm²`, `${area - 6 > 0 ? area - 6 : area + 18} cm²`];
+        explanation = `Área do trapézio = ((B + b) × h) / 2 = ((${b2} + ${b1}) × ${h}) / 2 = ${area} cm².`;
+        tip = 'Trapézio = ((B + b) . h) / 2';
+      } else {
+        const d1 = factor + 4;
+        const d2 = factor + 2;
+        const area = (d1 * d2) / 2;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) As diagonais de um losango medem ${d1} cm e ${d2} cm. Qual sua área?`;
+        correctText = `${area} cm²`;
+        wrongTexts = [`${d1 * d2} cm²`, `${area + 14} cm²`, `${area - 8 > 0 ? area - 8 : area + 22} cm²`];
+        explanation = `Área do losango = (D × d) / 2 = (${d1} × ${d2}) / 2 = ${area} cm².`;
+        tip = 'Losango = (D . d) / 2';
+      }
+    } else if (topicLower.includes('estatística')) {
+      const baseVal = offset + index;
+      const mode = index % 3;
+      if (mode === 0) {
+        const v1 = baseVal + 2;
+        const v2 = baseVal + 5;
+        const v3 = baseVal + 8;
+        const v4 = baseVal + 13;
+        const mean = ((v1 + v2 + v3 + v4) / 4).toFixed(1).replace('.0', '');
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) A média aritmética do conjunto {${v1}, ${v2}, ${v3}, ${v4}} é:`;
+        correctText = `${mean}`;
+        wrongTexts = [`${Number(mean) + 3}`, `${v3}`, `${Number(mean) - 2 > 0 ? Number(mean) - 2 : 1}`];
+        explanation = `Soma / 4 = (${v1} + ${v2} + ${v3} + ${v4}) / 4 = ${mean}.`;
+        tip = 'Média = Soma total ÷ quantidade.';
+      } else if (mode === 1) {
+        const arr = [baseVal, baseVal + 4, baseVal + 9, baseVal + 15, baseVal + 22];
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Qual é a mediana da amostra ordenada {${arr.join(', ')}}?`;
+        correctText = `${arr[2]}`;
+        wrongTexts = [`${arr[0]}`, `${arr[4]}`, `${((arr[0] + arr[4]) / 2).toFixed(1)}`];
+        explanation = `O termo central da sequência com 5 elementos é ${arr[2]}.`;
+        tip = 'Mediana = elemento do meio em ordem crescente.';
+      } else {
+        const m = baseVal + 6;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) No conjunto {${m}, ${m + 3}, ${m}, ${m + 7}, ${m}}, qual é a moda?`;
+        correctText = `${m}`;
+        wrongTexts = [`${m + 3}`, `${m + 7}`, `Não há moda`];
+        explanation = `O valor que mais se repete é ${m}.`;
+        tip = 'Moda = valor mais frequente.';
+      }
+    } else if (topicLower.includes('porcentagem')) {
+      const cap = 200 + index * 50 + offset * 10;
+      const rate = 5 + (index % 6) * 5;
+      const res = (cap * rate) / 100;
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Um valor de R$ ${cap},00 sofreu reajuste de ${rate}%. Qual o montante do acréscimo?`;
+      correctText = `R$ ${res.toFixed(2).replace('.', ',')}`;
+      wrongTexts = [`R$ ${(res + 30).toFixed(2).replace('.', ',')}`, `R$ ${(res - 15 > 0 ? res - 15 : 10).toFixed(2).replace('.', ',')}`, `R$ ${(cap - res).toFixed(2).replace('.', ', ')}`];
+      explanation = `Cálculo: ${cap} × (${rate} / 100) = R$ ${res.toFixed(2)}.`;
+      tip = 'Multiplique o valor pela taxa percentual e divida por 100.';
+    } else if (topicLower.includes('regra de três')) {
+      const a = 2 + (index % 4);
+      const b = 15 + index * 3 + offset;
+      const c = a * 2;
+      const res = (b * c) / a;
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Se ${a} máquinas produzem ${b} peças, ${c} máquinas produzirão:`;
+      correctText = `${res} peças`;
+      wrongTexts = [`${res + 20} peças`, `${res - 15 > 0 ? res - 15 : 10} peças`, `${b * c} peças`];
+      explanation = `Proporção direta: X = (${b} × ${c}) / ${a} = ${res}.`;
+      tip = 'Regra de três simples direta.';
+    } else {
+      const a = 2 + (index % 4);
+      const x = 3 + index + offset;
+      const b = 4 + (index % 7);
+      const res = a * x + b;
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Resolva: ${a}x + ${b} = ${res}. O valor de x é:`;
+      correctText = `x = ${x}`;
+      wrongTexts = [`x = ${x + 2}`, `x = ${x - 1 > 0 ? x - 1 : x + 4}`, `x = ${a + b}`];
+      explanation = `Isolando x: ${a}x = ${res} - ${b} => ${a}x = ${res - b} => x = ${x}.`;
+      tip = 'Isole a incógnita x.';
+    }
+  }
+
+  // -------------------------------------------------------------
+  // LINGUAGENS & CÓDIGOS
+  // -------------------------------------------------------------
+  else if (subjectId === 'linguagens') {
+    if (topicLower.includes('redação') || topicLower.includes('competência 5')) {
+      const ags = ['O Ministério da Educação', 'O Governo Federal', 'As Secretarias de Segurança', 'O Ministério da Cidadania', 'As Instituições de Ensino', 'O Poder Legislativo'];
+      const acs = ['promover campanhas públicas', 'destinar recursos financeiros', 'implementar diretrizes nacionais', 'fiscalizar o cumprimento', 'articular debates comunitários'];
+      const mes = ['por meio de mídias digitais', 'mediante parcerias estratégicas', 'através de leis complementares', 'por intermédio de editais abertos'];
+      const efs = ['para garantir a inclusão social', 'visando a conscientização coletiva', 'com o intuito de reduzir desigualdades', 'a fim de salvaguardar direitos'];
+      
+      const selAg = ags[(index + caseId) % ags.length];
+      const selAc = acs[index % acs.length];
+      const selMe = mes[(index * 2) % mes.length];
+      const selEf = efs[(index * 3) % efs.length];
+
+      const type = index % 5;
+      if (type === 0) {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na proposta "...${selAg} deve ${selAc}...", o segmento "${selAg}" exerce a função de:`;
+        correctText = 'Agente Social (Executor da ação)';
+        wrongTexts = ['Detalhamento do meio', 'Efeito social pretendido', 'Tese argumentativa'];
+        explanation = 'O Agente é o responsável por executar a intervenção sugerida.';
+        tip = 'Quem faz? Agente.';
+      } else if (type === 1) {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na frase "... ${selMe} ...", qual dos 5 elementos da Competência 5 é destacado?`;
+        correctText = 'Meio / Modo (Como a ação será realizada)';
+        wrongTexts = ['Agente interventor', 'Efeito final', 'Repertório legitimado'];
+        explanation = 'O Meio ou Modo indica os instrumentos utilizados para a execução.';
+        tip = 'Como faz? Meio/Modo.';
+      } else if (type === 2) {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na oração "... ${selEf} ...", identifica-se o elemento denominado:`;
+        correctText = 'Efeito / Finalidade (O objetivo da medida)';
+        wrongTexts = ['Detalhamento acessório', 'Agente executivo', 'Conectivo interparágrafo'];
+        explanation = 'O Efeito demonstra o impacto gerado pela intervenção.';
+        tip = 'Para que serve? Efeito/Finalidade.';
+      } else if (type === 3) {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Ao inserir uma especificação complementar entre vírgulas ou parênteses sobre o agente, constrói-se o elemento de:`;
+        correctText = 'Detalhamento';
+        wrongTexts = ['Tese implícita', 'Conclusão prévia', 'Argumento ad hominem'];
+        explanation = 'O Detalhamento enriquece a proposta com informações adicionais.';
+        tip = 'Detalhamento traz aclaramento sobre um dos elementos centrais.';
+      } else {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Para obter nota máxima na Competência 5 da Redação ENEM, a proposta deve conter obrigatoriamente:`;
+        correctText = 'Os 5 elementos estruturantes completos (Agente, Ação, Meio, Efeito e Detalhamento)';
+        wrongTexts = ['Apenas dois elementos simples', 'Citação de três filósofos sem agente', 'Somente a opinião pessoal do autor'];
+        explanation = 'A C5 exige rigorosamente a presença dos 5 elementos da intervenção.';
+        tip = 'Checklist ENEM: Agente + Ação + Meio + Efeito + Detalhamento.';
+      }
+    } else if (topicLower.includes('conectivo') || topicLower.includes('sintaxe')) {
+      const items = [
+        { c: 'portanto', r: 'Conclusão ou consequência lógica' },
+        { c: 'contudo', r: 'Oposição / Adversidade' },
+        { c: 'além disso', r: 'Adição de argumentos' },
+        { c: 'visto que', r: 'Causa ou explicação' },
+        { c: 'conquanto', r: 'Concessão' },
+        { c: 'a fim de que', r: 'Finalidade' }
+      ];
+      const chosen = items[index % items.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na coesão textual, o conectivo "${chosen.c}" estabelece primariamente uma relação de:`;
+      correctText = chosen.r;
+      wrongTexts = ['Alternância exclusiva', 'Comparação proporcional', 'Condicionalidade restrita'];
+      explanation = `O operador argumentativo "${chosen.c}" introduz valor semântico de ${chosen.r.toLowerCase()}.`;
+      tip = 'Atente-se ao sentido lógico do conectivo no texto.';
+    } else if (topicLower.includes('modernismo') || topicLower.includes('literatura')) {
+      const lItems = [
+        { t: 'Semana de Arte Moderna (1922)', d: 'Ruptura com o academicismo e busca pela identidade nacional' },
+        { t: '1ª Fase Modernista', d: 'Irreverência, humor, coloquialismo e destruição de formas rígidas' },
+        { t: '2ª Fase - Romance Regionalista', d: 'Foco na seca, nas desigualdades sociais e na denúncia da realidade do Nordeste' },
+        { t: 'Antropofagia de Oswald de Andrade', d: 'Deglutição crítica da cultura estrangeira para criação de arte genuinamente brasileira' }
+      ];
+      const li = lItems[index % lItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Sobre o movimento "${li.t}", assinale a alternativa correta:`;
+      correctText = `Caracterizou-se por ${li.d.toLowerCase()}.`;
+      wrongTexts = [
+        `Teve como único propósito imitar os sonetos do Parnasianismo francês`,
+        `Proibiu o uso de expressões populares na literatura`,
+        `Defendeu o retorno estético aos padrões do Arcadismo colonial`
+      ];
+      explanation = `O contexto histórico e literário de ${li.t} destaca-se por ${li.d.toLowerCase()}.`;
+      tip = 'Modernismo buscou liberdade estética e valorização do Brasil.';
+    } else {
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Quando um texto foca primordialmente no emissor e em seus estados subjetivos e emocionais, predomina a função:`;
+      correctText = 'Emotiva ou Expressiva';
+      wrongTexts = ['Apelativa ou Conativa', 'Metalinguística', 'Referencial ou Denotativa'];
+      explanation = 'A função emotiva tem como foco o próprio emissor e sua subjetividade.';
+      tip = 'Emotiva = Foco no Eu (emissor).';
+    }
+  }
+
+  // -------------------------------------------------------------
+  // CIÊNCIAS DA NATUREZA
+  // -------------------------------------------------------------
+  else if (subjectId === 'natureza') {
+    if (topicLower.includes('química') || topicLower.includes('orgânica')) {
+      const qItems = [
+        { t: 'Alcanos', d: 'Hidrocarbonetos saturados com ligações simples' },
+        { t: 'Alcenos', d: 'Hidrocarbonetos insaturados com uma ligação dupla' },
+        { t: 'Álcoois', d: 'Compostos orgânicos com o grupo hidroxila (-OH)' },
+        { t: 'Ácidos Carboxílicos', d: 'Compostos com o grupo funcional carboxila (-COOH)' }
+      ];
+      const qi = qItems[index % qItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na Química Orgânica, a classe dos "${qi.t}" é definida por:`;
+      correctText = qi.d;
+      wrongTexts = ['Misturas metálicas homogêneas', 'Sistematizações inorgânicas sem carbono', 'Gases nobres rarefeitos'];
+      explanation = `${qi.t} caracterizam-se estruturalmente por ${qi.d.toLowerCase()}.`;
+      tip = `Reconheça os grupos funcionais das funções orgânicas.`;
+    } else if (topicLower.includes('física') || topicLower.includes('newton') || topicLower.includes('termodinâmica')) {
+      const mode = index % 2;
+      if (mode === 0) {
+        const m = 3 + (index % 5);
+        const a = 2 + (index % 4);
+        const f = m * a;
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Qual a força resultante (F = m · a) para uma massa de ${m} kg acelerada a ${a} m/s²?`;
+        correctText = `${f} N`;
+        wrongTexts = [`${f + 12} N`, `${m + a} N`, `${m * 5} N`];
+        explanation = `F = ${m} × ${a} = ${f} N.`;
+        tip = 'Segunda Lei de Newton: F = m . a';
+      } else {
+        statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) A Primeira Lei da Termodinâmica enuncia o princípio de:`;
+        correctText = 'Conservação da Energia';
+        wrongTexts = ['Destruição de calor', 'Aumento infinito de trabalho sem fonte', 'Criação espontânea de matéria'];
+        explanation = 'A energia total de um sistema isolado conserva-se constante.';
+        tip = 'Energia não se cria nem se destrói.';
+      }
+    } else if (topicLower.includes('ecologia')) {
+      const eItems = [
+        { t: 'Produtores', d: 'Organismos autótrofos que fixam energia luminosa (base da cadeia)' },
+        { t: 'Decompositores', d: 'Fungos e bactérias que reciclam nutrientes para o solo' },
+        { t: 'Mutualismo', d: 'Relação harmônica interespecífica obrigatória onde ambos se beneficiam' }
+      ];
+      const ei = eItems[index % eItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Em Ecologia, o papel dos "${ei.t}" consiste em:`;
+      correctText = ei.d;
+      wrongTexts = ['Consumir carcaças sem devolver minerais', 'Bloquear o fluxo energético', 'Gerar radiação química primária'];
+      explanation = `Ecologicamente, ${ei.t.toLowerCase()} cumprem a função de ${ei.d.toLowerCase()}.`;
+      tip = 'Dinâmica das relações tróficas e ecológicas.';
+    } else {
+      const cItems = [
+        { o: 'Mitocôndria', f: 'Respiração celular e síntese de ATP' },
+        { o: 'Ribossomo', f: 'Tradução e síntese de proteínas' },
+        { o: 'Complexo de Golgi', f: 'Empacotamento e secreção de substâncias' }
+      ];
+      const ci = cItems[index % cItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) A organela celular "${ci.o}" tem como principal função:`;
+      correctText = ci.f;
+      wrongTexts = ['Armazenar água salgada em excesso', 'Produzir seiva bruta por fotossíntese', 'Degradar a parede celular'];
+      explanation = `A estrutura ${ci.o} é especializada em ${ci.f.toLowerCase()}.`;
+      tip = 'Funções das organelas citoplasmáticas.';
+    }
+  }
+
+  // -------------------------------------------------------------
+  // CIÊNCIAS HUMANAS
+  // -------------------------------------------------------------
+  else {
+    if (topicLower.includes('filosofia')) {
+      const pItems = [
+        { author: 'Platão', c: 'Mito da Caverna e Mundo das Ideias' },
+        { author: 'Sócrates', c: 'Maiêutica e o reconhecimento da própria ignorância' },
+        { author: 'Aristóteles', c: 'Ética do Justo Meio e virtude prática' },
+        { author: 'Descartes', c: 'Dúvida metódica e o "Penso, logo existo"' }
+      ];
+      const pi = pItems[index % pItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) O filósofo ${pi.author} é amplamente reconhecido por sua contribuição em:`;
+      correctText = pi.c;
+      wrongTexts = ['Defesa do mercantilismo colonial estrito', 'Criação das leis da termodinâmica clássica', 'Negação completa da geometria plana'];
+      explanation = `O legado de ${pi.author} fundamenta-se em ${pi.c}.`;
+      tip = `Filosofia de ${pi.author}.`;
+    } else if (topicLower.includes('geografia') || topicLower.includes('conurbação') || topicLower.includes('urbanização') || topicLower.includes('geopolítica')) {
+      const gItems = [
+        { t: 'Conurbação', d: 'Fusão física entre manchas urbanas de municípios vizinhos' },
+        { t: 'Migração Pendular', d: 'Deslocamento diário de trabalhadores entre cidades' },
+        { t: 'Gentrificação', d: 'Enobrecimento e valorização imobiliária que substitui moradores locais' }
+      ];
+      const gi = gItems[index % gItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) O conceito geográfico de "${gi.t}" caracteriza-se por:`;
+      correctText = gi.d;
+      wrongTexts = ['Isolamento econômico total de vilarejos', 'Paralisação das trocas comerciais globais', 'Proibição de circulação municipal'];
+      explanation = `Em geografia urbana, ${gi.t} refere-se a ${gi.d.toLowerCase()}.`;
+      tip = 'Dinâmicas demográficas e espaciais.';
+    } else if (topicLower.includes('sociologia') || topicLower.includes('cidadania')) {
+      const sItems = [
+        { a: 'Karl Marx', th: 'Luta de classes como motor da história' },
+        { a: 'Émile Durkheim', th: 'Conceito de Fato Social (coercitivo e exterior)' },
+        { a: 'Max Weber', th: 'Ação social dotada de sentido individual' }
+      ];
+      const si = sItems[index % sItems.length];
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) Na Sociologia clássica, ${si.a} destacou-se por formular a teoria de:`;
+      correctText = si.th;
+      wrongTexts = ['Análise puramente orgânica de tecidos humanos', 'Cálculo infinitesimal de órbitas planetárias', 'Regras de contabilidade mercantil'];
+      explanation = `A sociologia de ${si.a} estruturou-se em torno de ${si.th.toLowerCase()}.`;
+      tip = `Teoria sociológica de ${si.a}.`;
+    } else {
+      statement = `[${lvlTag} • Q${index + 1}] (${levelContextPrefix}) No contexto histórico do Brasil Colônia, o sistema de "Plantation" fundamentava-se em:`;
+      correctText = 'Latifúndio, monocultura, escravidão e foco na exportação';
+      wrongTexts = ['Pequena propriedade familiar policultora', 'Trabalho assalariado sindicalizado', 'Industrialização urbana autônoma'];
+      explanation = 'O modelo agroexportador colonial baseava-se no latifúndio escravocrata.';
+      tip = 'Plantation = Latifúndio + Monocultura + Escravismo.';
+    }
+  }
+
+  const qId = `q_${schoolLevel}_${subjectId}_${actualTopic.replace(/\s+/g, '_')}_idx${index}_s${uniqueSeed}`;
+
+  const rawCleanedWrong = Array.from(new Set(wrongTexts.filter(w => w && w !== correctText)));
+  while (rawCleanedWrong.length < 3) {
+    rawCleanedWrong.push(`Opção alternativa complementar ${rawCleanedWrong.length + 1}`);
+  }
+
+  const rawOptions = [
+    { text: correctText, correct: true },
+    { text: rawCleanedWrong[0], correct: false },
+    { text: rawCleanedWrong[1], correct: false },
+    { text: rawCleanedWrong[2], correct: false }
+  ];
+
+  return {
+    id: qId,
+    subject: subjectId,
+    topic: actualTopic,
+    difficulty: diff,
+    statement,
+    options: shuffleArray(rawOptions),
+    explanation,
+    tip
+  };
+};
+
+export default function App() {
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem(USER_PROFILE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.isLoggedIn) return parsed;
+      } catch (e) {
+        console.error('Falha ao carregar perfil', e);
+      }
+    }
+    return {
+      username: '',
+      isLoggedIn: false,
+      isNewRegistration: false,
+      avatar: '🎓',
+      level: 1,
+      xp: 0,
+      streak: 1,
+      bestStreak: 1,
+      schoolLevel: '3em',
+      selectedDifficulty: 'todas',
+      selectedSubject: 'matematica',
+      questionsPerMatch: 10,
+      timerEnabled: true,
+      settings: {
+        darkMode: false,
+        soundEnabled: true,
+        showTips: true,
+        autoExplain: true
+      },
+      stats: {
+        totalAnswered: 0,
+        correctAnswers: 0,
+        linguagens: { correct: 0, total: 0 },
+        matematica: { correct: 0, total: 0 },
+        natureza: { correct: 0, total: 0 },
+        humanas: { correct: 0, total: 0 }
+      },
+      achievements: []
+    };
+  });
+
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [currentTab, setCurrentTab] = useState(() => user.isLoggedIn ? 'menu' : 'login');
+
+  const [authInput, setAuthInput] = useState({ username: '', password: '', confirmPassword: '' });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  const [activeSubject, setActiveSubject] = useState(SUBJECTS[0]);
+  const [gameQuestions, setGameQuestions] = useState([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState(null);
+  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
+  const [matchScore, setMatchScore] = useState(0);
+  const [matchHistory, setMatchHistory] = useState([]);
+  
+  const [timerSeconds, setTimerSeconds] = useState(30);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(user));
+    } catch (e) {
+      console.error('Erro de gravação', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user.settings?.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [user.settings?.darkMode]);
+
+  useEffect(() => {
+    let interval = null;
+    const isTimerActive = user.timerEnabled !== false;
+
+    if (currentTab === 'game' && !isAnswerSubmitted && isTimerActive) {
+      interval = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            handleTimeExpired();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentTab, isAnswerSubmitted, currentQuestionIndex, user.timerEnabled]);
+
+  const handleTimeExpired = () => {
+    if (isAnswerSubmitted) return;
+
+    const currentQ = gameQuestions[currentQuestionIndex];
+    setSelectedOptionIndex(-1);
+    setIsAnswerSubmitted(true);
+
+    setMatchHistory(prev => [
+      ...prev,
+      {
+        question: currentQ,
+        selectedOption: null,
+        isCorrect: false,
+        earnedXP: 0,
+        timedOut: true
+      }
+    ]);
+  };
+
+  const startQuizMatch = (subjectObj, specificTopic = null) => {
+    const targetSubject = subjectObj || activeSubject;
+    if (!targetSubject) return;
+
+    const chosenTopic = specificTopic || activeTopic;
+    const requestedCount = Number(user.questionsPerMatch) || 10;
+    const neededCount = Math.max(1, Math.min(50, requestedCount));
+    const schoolLvl = user.schoolLevel || '3em';
+
+    const compiledQuestions = [];
+    const usedFingerprints = new Set();
+    const topicsToUse = chosenTopic ? [chosenTopic] : (targetSubject.topics || []);
+
+    let attempts = 0;
+    let idx = 0;
+
+    while (compiledQuestions.length < neededCount && attempts < 2000) {
+      attempts++;
+      const currentTopic = topicsToUse[idx % topicsToUse.length];
+      
+      const candidate = generateTopicSpecificQuestion(
+        targetSubject.id,
+        currentTopic,
+        idx,
+        user.selectedDifficulty,
+        schoolLvl
+      );
+
+      idx++;
+
+      if (!candidate || !candidate.statement) continue;
+
+      const fingerprint = normalizeStatementFingerprint(candidate.statement);
+      if (usedFingerprints.has(fingerprint)) continue;
+
+      usedFingerprints.add(fingerprint);
+      compiledQuestions.push(candidate);
+    }
+
+    setActiveSubject(targetSubject);
+    setGameQuestions(compiledQuestions);
+    setCurrentQuestionIndex(0);
+    setSelectedOptionIndex(null);
+    setIsAnswerSubmitted(false);
+    setMatchScore(0);
+    setMatchHistory([]);
+    setTimerSeconds(30);
+    setCurrentTab('game');
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex + 1 < gameQuestions.length) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setSelectedOptionIndex(null);
+      setIsAnswerSubmitted(false);
+      setTimerSeconds(30);
+    } else {
+      setCurrentTab('report');
+    }
+  };
+
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    const inputName = authInput.username.trim();
+    const inputPass = authInput.password.trim();
+
+    if (!inputName || !inputPass) {
+      setAuthError('Por favor, preencha o nome e a senha.');
+      return;
+    }
+
+    const hashedPass = hashPassword(inputPass);
+    let accountsDB = {};
+    try {
+      const storedDB = localStorage.getItem(ACCOUNTS_DB_KEY);
+      if (storedDB) accountsDB = JSON.parse(storedDB);
+    } catch (err) {
+      accountsDB = {};
+    }
+
+    const accountKey = inputName.toLowerCase();
+
+    if (isRegistering) {
+      if (inputPass !== authInput.confirmPassword.trim()) {
+        setAuthError('As senhas digitadas não coincidem.');
+        return;
+      }
+      if (accountsDB[accountKey]) {
+        setAuthError('Já existe um jogador cadastrado com este nome.');
+        return;
+      }
+
+      const newProfile = {
+        username: inputName,
+        hashedPassword: hashedPass,
+        isLoggedIn: true,
+        isNewRegistration: true,
+        avatar: '🎓',
+        level: 1,
+        xp: 0,
+        streak: 1,
+        bestStreak: 1,
+        schoolLevel: '3em',
+        selectedDifficulty: 'todas',
+        selectedSubject: 'matematica',
+        questionsPerMatch: 10,
+        timerEnabled: true,
+        settings: { darkMode: false, soundEnabled: true, showTips: true, autoExplain: true },
+        stats: {
+          totalAnswered: 0,
+          correctAnswers: 0,
+          linguagens: { correct: 0, total: 0 },
+          matematica: { correct: 0, total: 0 },
+          natureza: { correct: 0, total: 0 },
+          humanas: { correct: 0, total: 0 }
+        },
+        achievements: []
+      };
+
+      accountsDB[accountKey] = newProfile;
+      localStorage.setItem(ACCOUNTS_DB_KEY, JSON.stringify(accountsDB));
+
+      setUser(newProfile);
+      setCurrentTab('menu');
+    } else {
+      const existingAccount = accountsDB[accountKey];
+      if (!existingAccount) {
+        setAuthError('Conta não encontrada. Por favor, cadastre-se primeiro.');
+        return;
+      }
+      if (existingAccount.hashedPassword && existingAccount.hashedPassword !== hashedPass) {
+        setAuthError('Senha incorreta. Verifique seus dados.');
+        return;
+      }
+
+      const loggedAccount = { ...existingAccount, isLoggedIn: true, isNewRegistration: false };
+      setUser(loggedAccount);
+      setCurrentTab('menu');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(prev => ({ ...prev, isLoggedIn: false }));
+    setCurrentTab('login');
+  };
+
+  const handleSelectOption = (index) => {
+    if (isAnswerSubmitted) return;
+    setSelectedOptionIndex(index);
+  };
+
+  const handleSubmitAnswer = () => {
+    if (selectedOptionIndex === null || selectedOptionIndex === -1 || isAnswerSubmitted) return;
+
+    const currentQ = gameQuestions[currentQuestionIndex];
+    const chosenOpt = currentQ.options[selectedOptionIndex];
+    const isCorrect = chosenOpt ? chosenOpt.correct : false;
+
+    setIsAnswerSubmitted(true);
+
+    const xpGained = isCorrect ? (currentQ.difficulty === 'difícil' ? 30 : currentQ.difficulty === 'média' ? 20 : 10) : 0;
+    if (isCorrect) {
+      setMatchScore(prev => prev + xpGained);
+    }
+
+    setMatchHistory(prev => [
+      ...prev,
+      {
+        question: currentQ,
+        selectedOption: chosenOpt,
+        isCorrect,
+        earnedXP: xpGained,
+        timedOut: false
+      }
+    ]);
+
+    setUser(prev => {
+      const subKey = currentQ.subject;
+      const currentSubStats = prev.stats[subKey] || { correct: 0, total: 0 };
+      const newXP = prev.xp + xpGained;
+      const newLevel = Math.floor(newXP / 100) + 1;
+
+      return {
+        ...prev,
+        xp: newXP,
+        level: newLevel,
+        stats: {
+          ...prev.stats,
+          totalAnswered: prev.stats.totalAnswered + 1,
+          correctAnswers: prev.stats.correctAnswers + (isCorrect ? 1 : 0),
+          [subKey]: {
+            correct: currentSubStats.correct + (isCorrect ? 1 : 0),
+            total: currentSubStats.total + 1
+          }
+        }
+      };
+    });
+  };
+
+  const xpCurrentProgress = user.xp % 100;
+
+  if (!user.isLoggedIn || currentTab === 'login') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 dark:from-[#121214] dark:to-[#1A1A1E] font-sans">
+        <div className="w-full max-w-md bg-white dark:bg-[#1A1A1E] rounded-3xl p-8 border border-pink-200/80 dark:border-slate-800 shadow-xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#E87A90] to-[#9B72CF] mx-auto flex items-center justify-center text-white shadow-lg">
+              <GraduationCap className="w-10 h-10" />
+            </div>
+            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-[#E87A90] via-[#9B72CF] to-[#5B9BD5] bg-clip-text text-transparent">
+              DESAFIO DO SABER
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {isRegistering ? 'Crie seu perfil para salvar seu progresso' : 'FAÇA LOGIN PARA ENTRAR NO JOGO'}
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 text-rose-600 dark:text-rose-300 text-xs font-semibold flex items-center space-x-2">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAuthSubmit} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Nome ou Apelido do Jogador</label>
+              <div className="relative mt-1">
+                <User className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Seu nome cadastrado"
+                  value={authInput.username}
+                  onChange={e => setAuthInput(p => ({ ...p, username: e.target.value }))}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 text-sm font-semibold focus:outline-none focus:border-[#E87A90]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Senha</label>
+              <div className="relative mt-1">
+                <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Sua senha secreta"
+                  value={authInput.password}
+                  onChange={e => setAuthInput(p => ({ ...p, password: e.target.value }))}
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 text-sm font-semibold focus:outline-none focus:border-[#E87A90]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {isRegistering && (
+              <div>
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Confirmar Senha</label>
+                <div className="relative mt-1">
+                  <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Repita a senha"
+                    value={authInput.confirmPassword}
+                    onChange={e => setAuthInput(p => ({ ...p, confirmPassword: e.target.value }))}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 text-sm font-semibold focus:outline-none focus:border-[#E87A90]"
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#E87A90] via-[#9B72CF] to-[#5B9BD5] text-white font-extrabold text-sm shadow-md hover:opacity-95 transition"
+            >
+              {isRegistering ? 'CRIAR CONTA E ENTRAR' : 'ENTRAR NO JOGO'}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+            <button
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setAuthError('');
+              }}
+              className="text-xs font-bold text-[#E87A90] hover:underline"
+            >
+              {isRegistering ? 'Já possui uma conta? Faça login aqui' : 'Não tem conta? Cadastre-se gratuitamente'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen font-sans transition-colors duration-200 ${user.settings?.darkMode ? 'dark bg-[#121214] text-slate-100' : 'bg-[#FAF8F5] text-slate-800'}`}>
+      
+      {/* HEADER */}
+      <header className="sticky top-0 z-30 backdrop-blur-md bg-white/80 dark:bg-[#1A1A1E]/80 border-b border-pink-100 dark:border-slate-800 px-4 lg:px-8 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentTab('menu')}>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#E87A90] to-[#9B72CF] flex items-center justify-center text-white shadow-md">
+            <GraduationCap className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-[#E87A90] via-[#9B72CF] to-[#5B9BD5] bg-clip-text text-transparent">
+              DESAFIO DO SABER
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Aprenda jogando • Preparatório ENEM</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <div className="hidden md:flex items-center space-x-2 bg-pink-50 dark:bg-pink-950/40 px-3 py-1.5 rounded-full border border-pink-200 dark:border-pink-900">
+            <span className="text-lg">{user.avatar}</span>
+            <span className="text-xs font-bold text-pink-700 dark:text-pink-300">{user.username}</span>
+            <span className="text-xs bg-pink-200 dark:bg-pink-800 text-pink-800 dark:text-pink-100 px-2 py-0.5 rounded-full font-semibold">
+              Nível {user.level}
+            </span>
+          </div>
+
+          <button 
+            onClick={() => setUser(p => ({ ...p, settings: { ...p.settings, darkMode: !p.settings.darkMode } }))}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            title="Alternar Tema"
+          >
+            {user.settings?.darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+          </button>
+
+          <button 
+            onClick={() => setCurrentTab('settings')}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+
+          <button 
+            onClick={handleLogout}
+            className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition"
+            title="Sair da Conta"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* CONTAINER PRINCIPAL */}
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-65px)]">
+        
+        {/* BARRA LATERAL */}
+        <aside className="w-full md:w-64 bg-white/50 dark:bg-[#1A1A1E]/50 border-r border-slate-200/60 dark:border-slate-800 p-4 shrink-0">
+          <nav className="space-y-1">
+            {[
+              { id: 'menu', label: 'Início / Painel', icon: LayoutDashboard },
+              { id: 'subjects', label: 'Escolher Matérias', icon: BookOpen },
+              { id: 'enem', label: 'Rumo ao ENEM', icon: Trophy },
+              { id: 'evolution', label: 'Minha Evolução', icon: BarChart2 },
+              { id: 'settings', label: 'Configurações', icon: Settings },
+            ].map(item => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentTab(item.id)}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-[#E87A90] to-[#9B72CF] text-white shadow-md' 
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-8 p-4 rounded-2xl bg-gradient-to-br from-pink-50/80 to-purple-50/80 dark:from-slate-800/80 dark:to-slate-900/80 border border-pink-100 dark:border-slate-700">
+            <div className="flex items-center space-x-2 text-pink-600 dark:text-pink-300 font-bold text-xs uppercase tracking-wider mb-2">
+              <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span>Sua XP Total</span>
+            </div>
+            <p className="text-2xl font-extrabold text-slate-800 dark:text-white">{user.xp} XP</p>
+            
+            <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-[#E87A90] to-[#9B72CF] h-full rounded-full transition-all duration-300" 
+                style={{ width: `${xpCurrentProgress}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 text-right">
+              {xpCurrentProgress}/100 XP para Nível {user.level + 1}
+            </p>
+          </div>
+        </aside>
+
+        {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+
+          {/* ABA: MENU / DASHBOARD */}
+          {currentTab === 'menu' && (
+            <div className="space-y-6">
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#E87A90] via-[#9B72CF] to-[#5B9BD5] p-6 md:p-8 text-white shadow-xl">
+                <div className="relative z-10 max-w-xl">
+                  <div className="inline-flex items-center space-x-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold mb-3">
+                    <span>{SCHOOL_LEVELS.find(l => l.id === user.schoolLevel)?.name || '3º ANO ENSINO MÉDIO'}</span>
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold">
+                    {user.isNewRegistration ? `Bem-vindo, ${user.username}!` : `Bem-vindo de volta, ${user.username}!`} {user.avatar}
+                  </h2>
+                  <p className="mt-2 text-white/90 text-sm md:text-base leading-relaxed">
+                    Pronto para turbinar seus conhecimentos para a escola e para o ENEM? Escolha uma disciplina e comece seu desafio agora!
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button 
+                      onClick={() => setCurrentTab('subjects')}
+                      className="px-6 py-3 rounded-xl bg-white text-pink-600 font-bold text-sm hover:bg-slate-50 shadow-md transition flex items-center space-x-2"
+                    >
+                      <Play className="w-4 h-4 fill-pink-600" />
+                      <span>COMEÇAR A JOGAR</span>
+                    </button>
+                    <button 
+                      onClick={() => setCurrentTab('enem')}
+                      className="px-6 py-3 rounded-xl bg-black/20 backdrop-blur-md text-white font-bold text-sm hover:bg-black/30 transition flex items-center space-x-2"
+                    >
+                      <Trophy className="w-4 h-4" />
+                      <span>SIMULADOS ENEM</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center space-x-2">
+                  <Sparkles className="w-5 h-5 text-[#9B72CF]" />
+                  <span>Áreas do Conhecimento</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {SUBJECTS.map(sub => (
+                    <div 
+                      key={sub.id}
+                      onClick={() => {
+                        setActiveSubject(sub);
+                        setActiveTopic(null);
+                        setCurrentTab('internal_subject');
+                      }}
+                      className={`${sub.bgClass} p-5 rounded-3xl border-2 cursor-pointer transition transform hover:-translate-y-1 shadow-sm hover:shadow-md flex flex-col justify-between`}
+                    >
+                      <div>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${sub.badgeBg} mb-3`}>
+                          {sub.disciplines.length} Disciplinas
+                        </span>
+                        <h4 className="font-extrabold text-lg text-slate-800 dark:text-slate-100">{sub.name}</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-2">
+                          {sub.topics.slice(0, 3).join(' • ')}
+                        </p>
+                      </div>
+                      <div className="mt-6 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500">Acessar tópicos</span>
+                        <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-200">
+                          <ChevronRight className="w-5 h-5" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ABA: SELEÇÃO DE MATÉRIAS */}
+          {currentTab === 'subjects' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">Escolha a Matéria</h2>
+                <p className="text-sm text-slate-500">Selecione uma área para estudar os tópicos específicos ({user.questionsPerMatch} questões por partida).</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {SUBJECTS.map(sub => (
+                  <div 
+                    key={sub.id}
+                    className={`${sub.bgClass} p-6 rounded-3xl border-2 space-y-4`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">{sub.name}</h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                          Disciplinas: {sub.disciplines.join(', ')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/60 dark:bg-slate-900/60 p-4 rounded-2xl text-xs space-y-1">
+                      <p className="font-bold text-slate-700 dark:text-slate-200">Tópicos para praticar separadamente:</p>
+                      <p className="text-slate-500">{sub.topics.join(' • ')}</p>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => {
+                          setActiveSubject(sub);
+                          setActiveTopic(null);
+                          setCurrentTab('internal_subject');
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm shadow hover:opacity-90 transition flex items-center justify-center space-x-2"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>VER TÓPICOS E JOGAR</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ABA: TÓPICOS ESPECÍFICOS DA MATÉRIA */}
+          {currentTab === 'internal_subject' && (
+            <div className="space-y-6">
+              <button 
+                onClick={() => setCurrentTab('subjects')}
+                className="inline-flex items-center space-x-2 text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Voltar para Matérias</span>
+              </button>
+
+              <div className={`${activeSubject.bgClass} p-8 rounded-3xl border-2 space-y-4`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${activeSubject.badgeBg}`}>
+                  {activeSubject.name}
+                </span>
+                <h2 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">
+                  Perguntas Separadas por Tópicos
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Escolha um assunto específico abaixo para responder exclusivamente questões desse tópico.
+                </p>
+
+                <div className="pt-2 flex flex-wrap gap-4">
+                  <button 
+                    onClick={() => startQuizMatch(activeSubject, null)}
+                    className="px-6 py-3 rounded-2xl bg-[#E87A90] text-white font-extrabold text-sm shadow-md hover:bg-pink-600 transition flex items-center space-x-2"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>JOGAR TODOS OS TÓPICOS DA MATÉRIA</span>
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="font-extrabold text-lg text-slate-800 dark:text-slate-100">Selecione o Tópico Específico</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeSubject.topics.map((top, idx) => (
+                  <div 
+                    key={idx} 
+                    onClick={() => {
+                      setActiveTopic(top);
+                      startQuizMatch(activeSubject, top);
+                    }}
+                    className="bg-white dark:bg-[#1A1A1E] p-5 rounded-3xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-[#E87A90] transition shadow-sm hover:shadow-md flex justify-between items-center"
+                  >
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm">{top}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Clique para praticar este assunto especificamente</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-pink-50 dark:bg-pink-950 flex items-center justify-center text-[#E87A90]">
+                      <Play className="w-4 h-4 fill-current" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ABA: TELA DE JOGO DA QUESTÃO */}
+          {currentTab === 'game' && gameQuestions.length > 0 && (
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="flex justify-between items-center bg-white dark:bg-[#1A1A1E] p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center space-x-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${activeSubject.badgeBg}`}>
+                    {activeSubject.name}
+                  </span>
+                  <span className="text-xs text-slate-400">• {gameQuestions[currentQuestionIndex].topic}</span>
+                </div>
+                <div className="flex items-center space-x-4 text-xs font-bold">
+                  {user.timerEnabled !== false && (
+                    <div className={`flex items-center space-x-1 ${timerSeconds <= 5 ? 'text-rose-500 font-extrabold animate-pulse' : 'text-slate-600 dark:text-slate-300'}`}>
+                      <Clock className="w-4 h-4" />
+                      <span>{timerSeconds}s</span>
+                    </div>
+                  )}
+                  <div className="text-emerald-600 dark:text-emerald-400">
+                    + {matchScore} XP
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-[#E87A90] to-[#9B72CF] h-full transition-all duration-300"
+                  style={{ width: `${((currentQuestionIndex + 1) / gameQuestions.length) * 100}%` }}
+                />
+              </div>
+
+              <div className="bg-white dark:bg-[#1A1A1E] p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                <div className="flex justify-between items-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                  <span>Questão {currentQuestionIndex + 1} de {gameQuestions.length}</span>
+                  <span className="capitalize px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    Dificuldade: {gameQuestions[currentQuestionIndex].difficulty}
+                  </span>
+                </div>
+                <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                  {gameQuestions[currentQuestionIndex].statement}
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                {gameQuestions[currentQuestionIndex].options.map((opt, idx) => {
+                  const isSelected = selectedOptionIndex === idx;
+                  let btnStyle = 'bg-white dark:bg-[#1A1A1E] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-pink-300';
+
+                  if (isAnswerSubmitted) {
+                    if (opt.correct) {
+                      btnStyle = 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-500 text-emerald-800 dark:text-emerald-200 font-bold';
+                    } else if (isSelected && !opt.correct) {
+                      btnStyle = 'bg-rose-50 dark:bg-rose-950/80 border-rose-500 text-rose-800 dark:text-rose-200';
+                    }
+                  } else if (isSelected) {
+                    btnStyle = 'bg-pink-50 dark:bg-pink-950/60 border-pink-500 text-pink-900 dark:text-pink-100 font-bold';
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleSelectOption(idx)}
+                      disabled={isAnswerSubmitted || selectedOptionIndex === -1}
+                      className={`w-full p-4 rounded-2xl border-2 text-left text-xs md:text-sm transition flex items-center justify-between ${btnStyle}`}
+                    >
+                      <span className="pr-4">{String.fromCharCode(65 + idx)}) {opt.text}</span>
+                      {isAnswerSubmitted && opt.correct && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
+                      {isAnswerSubmitted && isSelected && !opt.correct && <XCircle className="w-5 h-5 text-rose-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {isAnswerSubmitted && selectedOptionIndex === -1 && (
+                <div className="p-5 rounded-3xl bg-rose-50 dark:bg-rose-950/90 border-2 border-rose-400 text-rose-900 dark:text-rose-100 space-y-2 shadow-md">
+                  <div className="flex items-center space-x-2 font-extrabold text-base text-rose-600 dark:text-rose-300">
+                    <Clock className="w-6 h-6 shrink-0 text-rose-600 animate-bounce" />
+                    <span>⏰ TEMPO ESGOTADO!</span>
+                  </div>
+                  {(() => {
+                    const correctOptIndex = gameQuestions[currentQuestionIndex].options.findIndex(o => o.correct);
+                    const correctOpt = gameQuestions[currentQuestionIndex].options[correctOptIndex];
+                    const letter = String.fromCharCode(65 + (correctOptIndex >= 0 ? correctOptIndex : 0));
+                    return (
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-1">
+                        A resposta correta era: <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{letter} — {correctOpt ? correctOpt.text : ''}</span>
+                      </p>
+                    );
+                  })()}
+                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-300 opacity-90">
+                    Esta questão foi registrada como <strong>NÃO RESPONDIDA</strong> e concedeu <strong>0 PONTOS</strong>.
+                  </p>
+                </div>
+              )}
+
+              {isAnswerSubmitted && (
+                <div className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
+                    <span>Explicação Pedagógica</span>
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {gameQuestions[currentQuestionIndex].explanation}
+                  </p>
+                  {gameQuestions[currentQuestionIndex].tip && (
+                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 text-xs text-purple-700 dark:text-purple-300">
+                      <strong>Dica de Fixação:</strong> {gameQuestions[currentQuestionIndex].tip}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-2">
+                <button
+                  onClick={() => setCurrentTab('menu')}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                >
+                  Sair do Desafio
+                </button>
+                {!isAnswerSubmitted ? (
+                  <button
+                    onClick={handleSubmitAnswer}
+                    disabled={selectedOptionIndex === null || selectedOptionIndex === -1}
+                    className="px-6 py-3 rounded-xl bg-[#E87A90] text-white font-extrabold text-xs shadow hover:bg-pink-600 disabled:opacity-50"
+                  >
+                    CONFIRMAR RESPOSTA
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNextQuestion}
+                    className="px-6 py-3 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold text-xs shadow hover:opacity-90"
+                  >
+                    {currentQuestionIndex + 1 < gameQuestions.length ? 'PRÓXIMA QUESTÃO' : 'VER RELATÓRIO FINAL'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ABA: RELATÓRIO FINAL DA PARTIDA */}
+          {currentTab === 'report' && (
+            <div className="max-w-xl mx-auto space-y-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#E87A90] to-[#9B72CF] mx-auto flex items-center justify-center text-white shadow-lg">
+                <Trophy className="w-10 h-10" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">Partida Concluída!</h2>
+                <p className="text-xs text-slate-500 mt-1">Confira seu aproveitamento nesta rodada</p>
+              </div>
+
+              <div className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
+                  <p className="text-xs font-bold">Acertos</p>
+                  <p className="text-2xl font-extrabold">{matchHistory.filter(h => h.isCorrect).length} / {gameQuestions.length}</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+                  <p className="text-xs font-bold">XP Conquistada</p>
+                  <p className="text-2xl font-extrabold">+{matchScore} XP</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => startQuizMatch(activeSubject, activeTopic)}
+                  className="flex-1 py-3 rounded-xl bg-[#E87A90] text-white font-extrabold text-xs shadow hover:bg-pink-600"
+                >
+                  JOGAR NOVAMENTE
+                </button>
+                <button
+                  onClick={() => setCurrentTab('menu')}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-extrabold text-xs"
+                >
+                  MENU PRINCIPAL
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ABA: SIMULADOS E REDAÇÃO ENEM */}
+          {currentTab === 'enem' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-amber-500 via-purple-600 to-pink-500 p-8 rounded-3xl text-white shadow-lg">
+                <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-bold">ÁREA EXCLUSIVA</span>
+                <h2 className="text-3xl font-extrabold mt-2">Rumo ao ENEM & Vestibulares</h2>
+                <p className="text-sm text-white/90 mt-1">
+                  Simulados completos das 4 áreas oficiais do exame e guias estruturados para a Redação Nota 1000.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {SUBJECTS.map(sub => (
+                  <div key={sub.id} className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+                    <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">{sub.name} no ENEM</h3>
+                    <p className="text-xs text-slate-500">Questões contextualizadas com gráficos, tabelas e raciocínio crítico.</p>
+                    <button
+                      onClick={() => startQuizMatch(sub, null)}
+                      className="w-full py-2.5 rounded-xl bg-[#9B72CF] text-white font-bold text-xs hover:bg-purple-600"
+                    >
+                      Iniciar Simulado {sub.name}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
+                <h3 className="font-extrabold text-lg text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                  <FileText className="w-5 h-5 text-[#E87A90]" />
+                  <span>Guia Prático da Redação ENEM</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-2xl bg-pink-50 dark:bg-pink-950/40 text-pink-900 dark:text-pink-100 font-medium">
+                    <strong>Competência 2:</strong> Repertório sociocultural legitimado e aplicação ao tema.
+                  </div>
+                  <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-100 font-medium">
+                    <strong>Competência 4:</strong> Diversidade de conectivos inter e intraparágrafos.
+                  </div>
+                  <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 font-medium">
+                    <strong>Competência 5:</strong> Proposta com Agente, Ação, Meio, Efeito e Detalhamento.
+                  </div>
+                </div>
+                <button
+                  onClick={() => startQuizMatch(SUBJECTS[0], 'Competência 5 Redação')}
+                  className="w-full py-3 rounded-xl bg-[#E87A90] text-white font-extrabold text-xs shadow hover:bg-pink-600"
+                >
+                  TREINAR QUESTÕES DE REDAÇÃO ENEM
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ABA: MINHA EVOLUÇÃO */}
+          {currentTab === 'evolution' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">Minha Evolução</h2>
+                <p className="text-sm text-slate-500">Acompanhe suas estatísticas de estudo e desempenho por matéria.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-[#1A1A1E] p-5 rounded-3xl border border-slate-200 dark:border-slate-800 text-center">
+                  <p className="text-xs font-bold text-slate-400">Total de Questões</p>
+                  <p className="text-3xl font-extrabold text-slate-800 dark:text-white mt-1">{user.stats.totalAnswered}</p>
+                </div>
+                <div className="bg-white dark:bg-[#1A1A1E] p-5 rounded-3xl border border-slate-200 dark:border-slate-800 text-center">
+                  <p className="text-xs font-bold text-slate-400">Total de Acertos</p>
+                  <p className="text-3xl font-extrabold text-emerald-600 mt-1">{user.stats.correctAnswers}</p>
+                </div>
+                <div className="bg-white dark:bg-[#1A1A1E] p-5 rounded-3xl border border-slate-200 dark:border-slate-800 text-center">
+                  <p className="text-xs font-bold text-slate-400">Taxa Geral de Acerto</p>
+                  <p className="text-3xl font-extrabold text-[#9B72CF] mt-1">
+                    {user.stats.totalAnswered > 0 ? `${Math.round((user.stats.correctAnswers / user.stats.totalAnswered) * 100)}%` : '0%'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
+                <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Aproveitamento por Matéria</h3>
+                <div className="space-y-4">
+                  {SUBJECTS.map(sub => {
+                    const subStat = user.stats[sub.id] || { correct: 0, total: 0 };
+                    const pct = subStat.total > 0 ? Math.round((subStat.correct / subStat.total) * 100) : 0;
+                    return (
+                      <div key={sub.id} className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <span>{sub.name}</span>
+                          <span>{pct}% ({subStat.correct}/{subStat.total})</span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${pct}%`, backgroundColor: sub.color }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ABA: CONFIGURAÇÕES */}
+          {currentTab === 'settings' && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">Configurações do Jogo</h2>
+
+              <div className="bg-white dark:bg-[#1A1A1E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
+                <div>
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Perfil do Jogador</h3>
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="text-xs text-slate-500 font-bold">Nome / Apelido</label>
+                      <input 
+                        type="text"
+                        value={user.username}
+                        onChange={(e) => setUser(p => ({ ...p, username: e.target.value }))}
+                        className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 text-sm font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 font-bold">Escolher Avatar</label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {AVATARS.map(av => (
+                          <button
+                            key={av}
+                            onClick={() => setUser(p => ({ ...p, avatar: av }))}
+                            className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition ${
+                              user.avatar === av ? 'bg-[#E87A90] text-white scale-110' : 'bg-slate-100 dark:bg-slate-800'
+                            }`}
+                          >
+                            {av}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Modo de Cronômetro</h3>
+                  <p className="text-xs text-slate-500 mt-1">Defina como o tempo é controlado durante as questões:</p>
+                  <div className="mt-3 flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => setUser(p => ({ ...p, timerEnabled: true }))}
+                      className={`flex-1 p-3.5 rounded-2xl border text-left text-xs font-bold transition flex items-center justify-between ${
+                        user.timerEnabled !== false
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-100'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <div>
+                        <p className="font-extrabold text-sm">Com Cronômetro</p>
+                        <p className="text-[11px] font-normal opacity-80 mt-0.5">30 segundos por questão</p>
+                      </div>
+                      {user.timerEnabled !== false && <Check className="w-5 h-5 text-blue-600 shrink-0" />}
+                    </button>
+
+                    <button
+                      onClick={() => setUser(p => ({ ...p, timerEnabled: false }))}
+                      className={`flex-1 p-3.5 rounded-2xl border text-left text-xs font-bold transition flex items-center justify-between ${
+                        user.timerEnabled === false
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/60 text-purple-900 dark:text-purple-100'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <div>
+                        <p className="font-extrabold text-sm">Sem Cronômetro</p>
+                        <p className="text-[11px] font-normal opacity-80 mt-0.5">Tempo ilimitado para responder</p>
+                      </div>
+                      {user.timerEnabled === false && <Check className="w-5 h-5 text-purple-600 shrink-0" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Quantidade de Questões por Partida</h3>
+                  <p className="text-xs text-slate-500 mt-1">Escolha quantas perguntas prefere responder em cada partida:</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[10, 20, 30, 40, 50].map(count => (
+                      <button
+                        key={count}
+                        onClick={() => setUser(p => ({ ...p, questionsPerMatch: count }))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                          user.questionsPerMatch === count
+                            ? 'bg-[#E87A90] text-white shadow'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {count} Questões
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Modo de Ensino / Nível Escolar</h3>
+                  <p className="text-xs text-slate-500 mt-1">Alterne o nível de conteúdo em foco:</p>
+                  <div className="mt-3 space-y-2">
+                    {SCHOOL_LEVELS.map(lvl => (
+                      <button
+                        key={lvl.id}
+                        onClick={() => setUser(p => ({ ...p, schoolLevel: lvl.id }))}
+                        className={`w-full p-3 rounded-2xl border text-left text-xs font-bold flex items-center justify-between transition ${
+                          user.schoolLevel === lvl.id
+                            ? 'border-[#E87A90] bg-pink-50 dark:bg-pink-950 text-pink-900 dark:text-pink-100'
+                            : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span>{lvl.icon} {lvl.name}</span>
+                        {user.schoolLevel === lvl.id && <Check className="w-4 h-4 text-[#E87A90]" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">Dificuldade das Questões</h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      { id: 'todas', label: 'Todas / Progressivo' },
+                      { id: 'fácil', label: 'Fácil' },
+                      { id: 'média', label: 'Médio' },
+                      { id: 'difícil', label: 'Difícil' }
+                    ].map(diff => (
+                      <button
+                        key={diff.id}
+                        onClick={() => setUser(p => ({ ...p, selectedDifficulty: diff.id }))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                          user.selectedDifficulty === diff.id
+                            ? 'bg-[#9B72CF] text-white shadow'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {diff.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 mb-3">Aparência e Preferências</h3>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-sm text-slate-600 dark:text-slate-300">Tema Escuro Confortável</span>
+                    <input 
+                      type="checkbox"
+                      checked={user.settings?.darkMode || false}
+                      onChange={(e) => setUser(p => ({ ...p, settings: { ...p.settings, darkMode: e.target.checked } }))}
+                      className="w-5 h-5 accent-[#E87A90]"
+                    />
+                  </label>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <button 
+                    onClick={() => {
+                      localStorage.removeItem(USER_PROFILE_KEY);
+                      window.location.reload();
+                    }}
+                    className="w-full py-3 rounded-xl border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-bold text-sm hover:bg-rose-50 dark:hover:bg-rose-950"
+                  >
+                    Resetar Todo o Progresso
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </main>
+      </div>
+    </div>
+  );
+}
